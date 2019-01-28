@@ -1,0 +1,138 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include "code.h"
+
+#include <sqlca.h>
+/*#include <sqlcpr.h>*/
+
+/*EXEC SQL INCLUDE sqlca;*/
+/*EXEC SQL INCLUDE sqlcpr;*/
+
+EXEC SQL WHENEVER NOTFOUND CONTINUE;
+EXEC SQL WHENEVER SQLERROR CONTINUE;
+
+int db_connect(const char* usr, const char* pwd)
+{
+	char username[USR_LEN];
+	char password[PWD_LEN];
+
+	strcpy(username, usr);
+	strcpy(password, pwd);
+
+	/*Connect to database*/
+	EXEC SQL CONNECT :username IDENTIFIED BY :password;
+	if(sqlca.sqlcode != DB_ERR)
+	{
+		printf("\nERROR-%s\n", sqlca.sqlerrm.sqlerrmc);
+		/*exit(-1);*/
+		return 0;
+	}
+
+	return 1;
+}
+
+int db_commit(int mode)
+{
+	if(mode == 1)
+	{
+		EXEC SQL COMMIT WORK RELEASE;
+	}
+	if(mode == 0)
+	{
+		EXEC SQL ROLLBACK WORK RELEASE;
+	}
+
+	if(sqlca.sqlcode != DB_ERR)
+	{
+		printf("\nERROR-%s\n", sqlca.sqlerrm.sqlerrmc);
+		return 0;
+	}
+
+	return 1;
+}
+
+int get_result()
+{
+	char s_sqls[MAX_SQL];
+	CODE* t_code = (CODE*)calloc(1, sizeof(CODE));
+
+	memset(s_sqls, '\0', MAX_SQL);
+	sprintf(s_sqls, "select STUDENT_ID, \
+			                    NAME, \
+			                    MAJOR \
+			             from scott.student");
+
+	/*printf("%s\n", s_sqls);*/
+	EXEC SQL PREPARE STATEMENT FROM :s_sqls;
+
+	/*Allocate cursor*/
+	EXEC SQL DECLARE cursor CURSOR for STATEMENT;
+	if(sqlca.sqlcode != DB_ERR)
+	{
+		printf("\nERROR-%s\n", sqlca.sqlerrm.sqlerrmc);
+		return 0;
+	}
+
+	/*Open cursor*/
+	EXEC SQL OPEN cursor;
+	if(sqlca.sqlcode != DB_ERR)
+	{
+		printf("\nERROR-%s\n", sqlca.sqlerrm.sqlerrmc);
+		return 0;
+	}
+
+	/*Fetch data*/
+	while(1)
+	{
+		EXEC SQL FETCH cursor INTO :t_code->id, \
+				                       :t_code->name, \
+				                       :t_code->major;
+
+		if(sqlca.sqlcode == REC_END)
+		{
+			break;
+		}
+
+		printf("ID:%s NAME:%s MAJOR:%s", t_code->id, t_code->name, t_code->major);
+	}
+
+	/*Close cursor*/
+	EXEC SQL CLOSE cursor;
+	if(sqlca.sqlcode != DB_ERR)
+	{
+		printf("\nERROR-%s\n", sqlca.sqlerrm.sqlerrmc);
+		return 0;
+	}
+
+	return 1;
+}
+
+int main(void)
+{
+	char username[USR_LEN];
+	char password[PWD_LEN];
+
+	int connected;
+
+	/*printf("\n---------[TEST MODE V3.0]---------\n\n");*/
+
+	strcpy(username, "system");
+	strcpy(password, "manager");
+
+	connected = db_connect(username, password);
+	if(connected)
+	{
+		printf("\n用户[%s]连接数据库成功.\n", username);
+	}
+	else
+	{
+	  printf("\n用户[%s]连接数据库失败.\n", username);
+	  return 0;
+	}
+
+	get_result();
+
+	return 1;
+}
